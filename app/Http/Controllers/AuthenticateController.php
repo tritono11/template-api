@@ -25,7 +25,8 @@ class AuthenticateController extends Controller
         $users = User::all();
         return $users;
     }    
-    
+
+    // http://test.app-default.local/server/public/api/authenticate
     public function authenticate(Request $request)
     {
         $credentials = $request->only('email', 'password');
@@ -41,6 +42,20 @@ class AuthenticateController extends Controller
         }
 
         // if no errors are encountered we can return a JWT
-        return response()->json(compact('token'));
+        //return response()->json(compact('token'));
+        $temp = ["status" => "1",
+                "user_id" => "",
+                "username" => auth()->user()->name,
+                "level" => "",
+                "role" => "",
+                "email" => auth()->user()->email,
+                "token" => $token];
+        return response()->json($temp);
+    }
+    
+    public function logout(Request $request)
+    {
+        auth()->logout();
+        return response()->json(["status" => 1]);
     }
 }
