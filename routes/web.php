@@ -16,3 +16,5 @@ Route::get('/', function () {
 });
 // Verifica iscrizione
 Route::get('user/verify/{token}', 'AuthenticateController@verifyUser');
+Route::get('user/reset/{token}', 'AuthenticateController@passwordReset');
+Route::post('user/reset_store/', 'AuthenticateController@storePasswordReset');

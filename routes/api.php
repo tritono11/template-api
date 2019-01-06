@@ -22,4 +22,6 @@ Route::resource('authenticate', 'AuthenticateController', ['only' => ['index']])
 Route::post('authenticate', 'AuthenticateController@authenticate');
 Route::post('logout', 'AuthenticateController@logout');
 Route::post('signup', 'AuthenticateController@signup');
+Route::post('beginPasswordReset', 'AuthenticateController@beginPasswordReset');
+
 

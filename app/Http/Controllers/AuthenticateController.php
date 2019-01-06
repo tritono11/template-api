@@ -14,6 +14,7 @@ use Validator;
 use App\UserVerification;
 use Mail; 
 use Carbon\Carbon;
+use App\model\UserPasswordReset;
 
 class AuthenticateController extends Controller
 {
@@ -22,7 +23,7 @@ class AuthenticateController extends Controller
         // Apply the jwt.auth middleware to all methods in this controller
         // except for the authenticate method. We don't want to prevent
         // the user from retrieving their token if they don't already have it
-        $this->middleware('jwt.auth', ['except' => ['authenticate','signup','verifyUser']]);
+        $this->middleware('jwt.auth', ['except' => ['authenticate','signup','verifyUser','resetPassword','beginPasswordReset','passwordReset','storePasswordReset']]);
     }
     
     public function index()
@@ -105,8 +106,9 @@ class AuthenticateController extends Controller
         return response()->json(['success' => true, "message" => "OK"]);
     }
     
-    // WEB
-    // http://test.app-default.local/server/public/api/authenticate
+    /* WEB
+     * 
+     */
     public function verifyUser(Request $request)
     {
         $token = $request->token;
@@ -122,7 +124,13 @@ class AuthenticateController extends Controller
                             $user->email_verified_at = Carbon::now()->toDateTimeString();
                             $user->save();
                             $data['success'] = true;
+                            $data["message"] = "";
+                        } else {
+                            $data['success'] = false;
+                            $data["message"] = "Utente già verificato";
                         }
+                    } else {
+                        
                     }
                 }catch(\Exception $e){
                     $data["message"] = "SqlEx";
@@ -136,4 +144,98 @@ class AuthenticateController extends Controller
         return view('verifica-email-utente', $data);
     }
     
+    /* 
+     * Invia una mail con un token che permette di accedere al form di reset password
+     */
+    public function beginPasswordReset(Request $request)
+    {
+        $validateData = $request->validate([
+                'email' => ['required', 'string', 'email', 'max:255']
+        ]);
+        $email = $request->only('email');
+        $data =['success' => false];
+        $user = User::where('email', $email)->first();
+        if ($user){
+            $verification_code = str_random(config('iblea.i_lunghezza_token_verifica'));
+            $userPasswordReset = UserPasswordReset::create([
+                'i_user_id' => $user->id,
+                't_ip'      => $request->ip(),
+                'remember_token'    => $verification_code
+            ]);
+            // invio email
+            $subject = "E' stato richiesto un cambio password";
+            try{
+                Mail::send('email.beginResetPassword', ['name' => $user->name, 'email' => $user->email, 'verification_code' => $userPasswordReset->remember_token],
+                    function($mail) use ($email, $name, $subject){
+                        $mail->from(getenv('FROM_EMAIL_ADDRESS'), "From User/Company Name Goes Here");
+                        $mail->to($email, $name);
+                        $mail->subject($subject);
+                    });
+            } catch(\Exception $e){
+                $data["message"] = "No reset email sended";
+            }
+            $data['success'] = true;
+        } else{
+            $data['message'] = 'Utente non presente';
+        }
+        return response()->json($data);
+    }
+    
+    /* WEB
+     * Visualizza il modulo di cambio password
+     */
+    public function passwordReset(Request $request)
+    {
+        $token = $request->token;
+        $data = ['success' => false];
+        if( $token && $token != "" && strlen($token) == config('iblea.i_lunghezza_token_verifica') ){ 
+            $userPasswordReset = UserPasswordReset::where('remember_token', $token)->first();
+            if ($userPasswordReset){
+                $data['success'] = true;
+                $data['token'] = $token;
+            } else {
+                // Nessun token di reset 
+                $data['token'] = '';
+            }
+        }else {
+            // token inviato non valido nel formato
+            $data['token'] = '';
+        }
+        return view('user/password-reset', $data);
+    }
+    
+    /* WEB
+     * Finalizza il cambio password
+     */
+    public function storePasswordReset(Request $request)
+    {
+        $validateData = $request->validate([
+                'password' => ['required', 'string', 'min:6', 'confirmed'],
+                'token' => ['required']
+        ]);
+        
+        $data = ['success' => false,
+                 'message' => ''];
+        try{
+            $userPasswordReset = UserPasswordReset::where('remember_token', $request->token)
+                                    ->whereNull('b_used')
+                                    ->first();
+            if($userPasswordReset){
+                $user = User::find($userPasswordReset->i_user_id);
+                if ($user){
+                    $user->password = Hash::make($request->password);
+                    $user->save();
+                    $userPasswordReset->b_used = 'Y';
+                    $userPasswordReset->save();
+                    $data['success'] = true;
+                }
+            }else{
+                $data['message'] = "Token invalido o scaduto";
+            }
+        } catch(\Exception $e){
+            $data['success'] = false;
+        }
+        return view('user/give-thanks', $data);
+        
+    }
 }
