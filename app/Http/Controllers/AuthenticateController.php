@@ -23,7 +23,7 @@ class AuthenticateController extends Controller
         // Apply the jwt.auth middleware to all methods in this controller
         // except for the authenticate method. We don't want to prevent
         // the user from retrieving their token if they don't already have it
-        $this->middleware('jwt.auth', ['except' => ['authenticate','signup','verifyUser','resetPassword','beginPasswordReset','passwordReset','storePasswordReset']]);
+        $this->middleware('jwt.auth', ['except' => ['authenticate','signup','verifyUser','resetPassword','beginPasswordReset','passwordReset','storePasswordReset','logout']]);
     }
     
     public function index()
@@ -57,6 +57,7 @@ class AuthenticateController extends Controller
                 "role" => "",
                 "email" => auth()->user()->email,
                 "token" => $token];
+        //TODO aggiornare login event per log 
         return response()->json($temp);
     }
     
