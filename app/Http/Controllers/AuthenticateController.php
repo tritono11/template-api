@@ -54,12 +54,11 @@ class AuthenticateController extends Controller
                 return response()->json(['error' => 'invalid_verified'], 200);
             }
         }
-        $user = \App\LogAuthUserEvent::create([
-                    'i_user_id' => auth()->user()->id,
-                    't_ip'      => $request->ip(),
-                ]);
-        // if no errors are encountered we can return a JWT
-        //return response()->json(compact('token'));
+        \App\LogAuthUserEvent::create([
+                'i_user_id' => auth()->user()->id,
+                't_ip'      => $request->ip(),
+        ]);
+        // if no errors are encountered we can return a JWT return response()->json(compact('token'));
         $temp = ["status" => "1",
                 "user_id" => "",
                 "username" => auth()->user()->name,
