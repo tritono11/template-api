@@ -40,14 +40,24 @@ class AuthenticateController extends Controller
 
         try {
             // verify the credentials and create a token for the user
-            if (! $token = JWTAuth::attempt($credentials)) {
+            if ( !$token = JWTAuth::attempt($credentials) ) {
                 return response()->json(['error' => 'invalid_credentials'], 401);
             }
         } catch (JWTException $e) {
             // something went wrong
             return response()->json(['error' => 'could_not_create_token'], 500);
         }
-
+        // 26/12/2019 - Verifica attivazione utente
+        if (config('iblea.b_attivazione')){
+            if (auth()->user()->email_verified_at == null){
+                auth()->logout();
+                return response()->json(['error' => 'invalid_verified'], 200);
+            }
+        }
+        $user = \App\LogAuthUserEvent::create([
+                    'i_user_id' => auth()->user()->id,
+                    't_ip'      => $request->ip(),
+                ]);
         // if no errors are encountered we can return a JWT
         //return response()->json(compact('token'));
         $temp = ["status" => "1",
@@ -57,7 +67,7 @@ class AuthenticateController extends Controller
                 "role" => "",
                 "email" => auth()->user()->email,
                 "token" => $token];
-        //TODO aggiornare login event per log 
+        
         return response()->json($temp);
     }
     
@@ -78,12 +88,11 @@ class AuthenticateController extends Controller
         
         $user = User::create([
                 'name'      => $request['name'],
-                'email'     => $request['email'],
+                'email'     => strtolower($request['email']),
                 'password'  => Hash::make($request['password']),
             ]);
         
         if (config('iblea.b_attivazione')){
-            
             $verification_code = str_random(config('iblea.i_lunghezza_token_verifica')); //Generate verification code
             $userVerification = UserVerification::create([
                 'i_user_id' => $user->id,
@@ -118,12 +127,16 @@ class AuthenticateController extends Controller
         if(config('iblea.b_attivazione')){
             if( $token && $token != "" && strlen($token) == config('iblea.i_lunghezza_token_verifica') ){
                 try{
-                    $userVerification = UserVerification::where('remember_token', $token)->first();
+                    $userVerification = UserVerification::where('remember_token', $token)
+                                            ->whereNull('b_used')
+                                            ->first();
                     if($userVerification){
                         $user = User::find($userVerification->i_user_id);
                         if (!$user->email_verified_at){
                             $user->email_verified_at = Carbon::now()->toDateTimeString();
                             $user->save();
+                            $userVerification->b_used = 'Y';
+                            $userVerification->save();
                             $data['success'] = true;
                             $data["message"] = "";
                         } else {
@@ -131,7 +144,8 @@ class AuthenticateController extends Controller
                             $data["message"] = "Utente già verificato";
                         }
                     } else {
-                        
+                        $data['success'] = false;
+                        $data["message"] = "Utente già verificato";
                     }
                 }catch(\Exception $e){
                     $data["message"] = "SqlEx";
